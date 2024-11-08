@@ -1,0 +1,91 @@
+import discord
+import random
+import re
+from discord.ext import commands
+from datetime import datetime, timedelta
+
+# Intentsの設定
+intents = discord.Intents.default()
+intents.message_content = True
+
+# Botのプレフィックスを設定
+bot = commands.Bot(command_prefix="d!", intents=intents)
+
+# 基準日と仮想日付の開始年・開始半期
+REFERENCE_DATE = datetime(2024, 10, 20)
+START_YEAR = 1943
+
+# 保存用の辞書
+saved_rolls = {}
+
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
+
+# d!dコマンド - 指定範囲でランダムに数値を選択して表示
+@bot.command()
+async def d(ctx, max_value: int, roll_count: int):
+    if max_value < 1 or roll_count < 1:
+        await ctx.send("初期値と振る回数は1以上にしてください。")
+        return
+    rolls = [random.randint(1, max_value) for _ in range(roll_count)]
+    await ctx.send(f"結果: **{rolls}**")
+
+# d!mコマンド - 計算式を解いて表示
+@bot.command()
+async def m(ctx, *, expression: str):
+    try:
+        # 許可された文字のみ使用
+        expression = re.sub(r"[^0-9+\-*/().]", "", expression)
+        result = eval(expression)
+        await ctx.send(f"解答: **{result}**")
+    except Exception:
+        await ctx.send("無効な計算式です。")
+
+# d!dsコマンド - 初期値と振る回数を保存
+@bot.command()
+async def ds(ctx, max_value: int, roll_count: int, save_name: str):
+    if max_value < 1 or roll_count < 1:
+        await ctx.send("初期値と振る回数は1以上にしてください。")
+        return
+    user_id = str(ctx.author.id)
+    if user_id not in saved_rolls:
+        saved_rolls[user_id] = {}
+    saved_rolls[user_id][save_name] = (max_value, roll_count)
+    await ctx.send(f"**{save_name}**で保存しました。 初期値:{max_value} 回数:{roll_count}.")
+
+# d!dlコマンド - 保存されたデータを使用してランダム数値を表示
+@bot.command()
+async def dl(ctx, save_name: str):
+    user_id = str(ctx.author.id)
+    if user_id in saved_rolls and save_name in saved_rolls[user_id]:
+        max_value, roll_count = saved_rolls[user_id][save_name]
+        rolls = [random.randint(1, max_value) for _ in range(roll_count)]
+        await ctx.send(f"**{save_name}**を振りました。: **{rolls}**")
+    else:
+        await ctx.send("指定された保存名が見つかりません。保存名が正しいか確認してください。")
+# d!dcコマンド - ランダム数値の回数をカウント
+@bot.command()
+async def dc(ctx, max_value: int, roll_count: int, target_value: int):
+    if max_value < 1 or roll_count < 1:
+        await ctx.send("初期値と振る回数は1以上にしてください。")
+        return
+    rolls = [random.randint(1, max_value) for _ in range(roll_count)]
+    count = rolls.count(target_value)
+    await ctx.send(f"{roll_count}回振った結果, {target_value}は **{count}** 回出ました。")
+
+# d!ymdコマンド - 仮想日付を計算して表示
+@bot.command()
+async def ymd(ctx):
+    # 現在の日付
+    today = datetime.now()
+    # 基準日からの経過日数を計算
+    days_passed = (today - REFERENCE_DATE).days
+
+    # 年と半期を計算
+    current_year = START_YEAR + (days_passed // 2)  # 2日で1年に相当
+    current_half = 1 + (days_passed % 2)  # 1日ごとに半期切り替え
+
+    # 仮想日付を表示
+    half_term = "上半期" if current_half == 1 else "下半期"
+    await ctx.send(f"世界大戦年数:** {current_year}年 {half_term}**")
